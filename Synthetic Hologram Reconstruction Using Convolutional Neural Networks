@@ -1,0 +1,106 @@
+# Project Title: Synthetic Hologram Reconstruction Using Convolutional Neural Networks
+
+"""
+This project demonstrates a basic implementation of a convolutional neural network (CNN)
+to reconstruct object images from synthetic digital holograms. The dataset consists of 64x64
+pixel grayscale images representing holograms (inputs) and their corresponding object images (labels).
+
+The model architecture is a minimal encoder-decoder structure using Conv2D and Conv2DTranspose layers.
+The goal is to train a network that learns to reconstruct an object image from its hologram.
+This work can serve as a foundational piece for more advanced optical neural networks and
+computational holography studies.
+"""
+
+# ---------------------- Imports ----------------------
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.keras.preprocessing.image import load_img
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Conv2D, Conv2DTranspose
+from tensorflow.keras.utils import plot_model
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping
+
+# ---------------------- Data Paths ----------------------
+X_train_path = "../input/synthetic-holograms64x64x1/X_train_HOLO/Labels/"
+y_train_path = "../input/synthetic-holograms64x64x1/y_train_obj/objects/"
+
+X_files = sorted(os.listdir(X_train_path))
+y_files = sorted(os.listdir(y_train_path))
+
+# ---------------------- Data Preprocessing ----------------------
+X_train, y_train = [], []
+for x_file, y_file in zip(X_files, y_files):
+    x_img = load_img(os.path.join(X_train_path, x_file), color_mode='grayscale')
+    y_img = load_img(os.path.join(y_train_path, y_file), color_mode='grayscale')
+    
+    x_arr = np.array(x_img).reshape(64, 64, 1) / 255.0
+    y_arr = np.array(y_img).reshape(64, 64, 1) / 255.0
+    
+    X_train.append(x_arr)
+    y_train.append(y_arr)
+
+X_train = np.array(X_train)
+y_train = np.array(y_train)
+
+# ---------------------- Visualize Samples ----------------------
+def show_samples(images, title):
+    fig, axes = plt.subplots(4, 4, figsize=(8, 8))
+    fig.suptitle(title)
+    for i, ax in enumerate(axes.flat):
+        ax.imshow(images[i * 30].squeeze(), cmap='gray')
+        ax.axis('off')
+    plt.tight_layout()
+    plt.show()
+
+show_samples(X_train, "Sample Holograms")
+show_samples(y_train, "Sample Labels")
+
+# ---------------------- Model Definition ----------------------
+input_shape = (64, 64, 1)
+inp = Input(shape=input_shape)
+x = Conv2D(32, kernel_size=3, strides=2, activation='relu', padding='same')(inp)
+x = Conv2D(64, kernel_size=3, strides=2, activation='relu', padding='same')(x)
+x = Conv2DTranspose(32, kernel_size=3, strides=2, activation='relu', padding='same')(x)
+x = Conv2DTranspose(1, kernel_size=3, strides=2, activation='sigmoid', padding='same')(x)
+model = Model(inputs=inp, outputs=x)
+
+model.compile(optimizer=Adam(learning_rate=1e-3), loss='mse', metrics=['mae'])
+model.summary()
+
+# ---------------------- Model Training ----------------------
+early_stop = EarlyStopping(monitor='loss', patience=10, restore_best_weights=True)
+history = model.fit(X_train, y_train, batch_size=32, epochs=100, callbacks=[early_stop], verbose=1)
+
+# ---------------------- Evaluation ----------------------
+def plot_predictions(model, X, y_true, n=5):
+    preds = model.predict(X[:n])
+    fig, axs = plt.subplots(n, 3, figsize=(12, 8))
+    for i in range(n):
+        axs[i, 0].imshow(X[i].squeeze(), cmap='gray')
+        axs[i, 0].set_title("Hologram")
+        axs[i, 1].imshow(y_true[i].squeeze(), cmap='gray')
+        axs[i, 1].set_title("Ground Truth")
+        axs[i, 2].imshow(preds[i].squeeze(), cmap='gray')
+        axs[i, 2].set_title("Prediction")
+        for j in range(3):
+            axs[i, j].axis('off')
+    plt.tight_layout()
+    plt.show()
+
+plot_predictions(model, X_train, y_train)
+
+# ---------------------- Remarks ----------------------
+"""
+This project shows that even a small CNN can learn meaningful mappings from holograms
+to object intensities. The model converges quickly and gives visually meaningful reconstructions.
+This work can be extended to:
+ - Phase retrieval tasks
+ - Larger or real holograms
+ - 3D reconstructions
+ - Deep generative modeling of holograms
+
+This notebook demonstrates the fusion of computational imaging and neural networks,
+which aligns well with research in computational optics and applied physics.
+"""
